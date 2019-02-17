@@ -79,7 +79,7 @@ func fmtDuration(d time.Duration) string {
 func speakStr(s string) {
 	err := exec.Command("say", s).Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nError speaking: %s", err)
+		beep()
 	}
 }
 
@@ -89,10 +89,13 @@ func alert(s string) {
 	} else {
 		s = strings.Replace(s, "\"", "", -1)
 	}
-	err := exec.Command("osascript", "-e", fmt.Sprintf("display notification \"%s\" with title \"waiter\"", s)).Run()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nError alerting: %s", err)
-	}
+	exec.Command("osascript", "-e", fmt.Sprintf("display notification \"%s\" with title \"waiter\"", s)).Run()
+}
+
+func beep() {
+	fmt.Fprint(os.Stderr, "\a")
+	time.Sleep(600 * time.Millisecond)
+	fmt.Fprint(os.Stderr, "\a")
 }
 
 func exitError(message string) {
