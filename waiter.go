@@ -7,34 +7,37 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
 const (
-	period = 200 * time.Millisecond
+	period = 100 * time.Millisecond
 	width  = 80
 )
 
 type sleepConf struct {
-	Dur  time.Duration
-	Text string
-	Say  bool
+	Dur     time.Duration
+	Text    string
+	Say     bool
+	WaitPid int
 }
 
 func main() {
 	conf := sleepConf{}
 
-	flag.BoolVar(&conf.Say, "s", false, "Say when done")
+	flag.BoolVar(&conf.Say, "s", false, "Speak when done")
+	flag.IntVar(&conf.WaitPid, "p", 0, "PID for process to wait on")
 	flag.Parse()
 	argc := flag.NArg()
-	if argc < 1 {
-		exitError("Must specify a time")
+	var sleepSecs float64
+	var err error
+	if argc > 0 {
+		sleepSecs, err = strconv.ParseFloat(flag.Arg(0), 64)
 	}
-	sleepSecs, err := strconv.ParseFloat(flag.Arg(0), 64)
 	if err != nil {
 		exitError("sleepSecs must be a number")
-	}
-	if sleepSecs < 0 {
+	} else if sleepSecs < 0 {
 		exitError("sleepSecs must be positive")
 	}
 	conf.Dur = time.Duration(sleepSecs*1000) * time.Millisecond
@@ -46,26 +49,78 @@ func main() {
 }
 
 func doSleep(conf sleepConf) {
-	end := time.Now().Add(conf.Dur)
-	for {
-		now := time.Now()
-		if now.After(end) {
-			break
-		}
-		remaining := time.Until(end)
-		if remaining < period {
-			time.Sleep(remaining)
+	if pid := conf.WaitPid; pid > 0 {
+		fmt.Fprintf(os.Stderr, "Waiting on process %d...", pid)
+		waited := waitForProcess(pid)
+		if waited {
+			fmt.Fprintln(os.Stderr, "DONE")
 		} else {
-			time.Sleep(period)
+			fmt.Fprintln(os.Stderr, "\nERROR: No such process")
+			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stderr, "Time remaining: %-10s\r", fmtDuration(remaining))
 	}
-	fmt.Fprintln(os.Stderr, "")
+
+	if conf.Dur != 0 {
+		end := time.Now().Add(conf.Dur)
+		for {
+			now := time.Now()
+			if now.After(end) {
+				break
+			}
+			remaining := time.Until(end)
+			if remaining < period {
+				time.Sleep(remaining)
+			} else {
+				time.Sleep(period)
+			}
+			conf.printProgress(remaining)
+		}
+		conf.printProgress(0)
+		fmt.Fprintln(os.Stderr, "")
+	}
 
 	alert(conf.Text)
 	if conf.Say {
-		speakStr(conf.Text)
+		t := conf.Text
+		if t == "" {
+			t = "done"
+		}
+		speakStr(t)
 	}
+}
+
+func waitForProcess(pid int) bool {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	waited := false
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			err := syscall.Kill(pid, syscall.Signal(0))
+			if err != nil {
+				return waited
+			}
+			waited = true
+		}
+	}
+}
+
+func (conf sleepConf) printProgress(remaining time.Duration) {
+	fmt.Fprintf(os.Stderr, "  %s %10s\r", progress(remaining, conf.Dur), fmtDuration(remaining))
+}
+
+const (
+	barLen int = 20
+)
+
+func progress(remaining, total time.Duration) string {
+	spaces := int(float64(barLen) * float64(remaining) / float64(total))
+	if spaces > barLen {
+		spaces = barLen
+	} else if spaces < 0 {
+		spaces = 0
+	}
+	return "[" + strings.Repeat("#", barLen-spaces) + strings.Repeat("-", spaces) + "]"
 }
 
 func fmtDuration(d time.Duration) string {
