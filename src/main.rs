@@ -8,7 +8,7 @@ mod waiter;
 
 fn main() {
     let start = Instant::now();
-    let matches = App::new("Waiter")
+    let app = App::new("Waiter")
         .version("0.1")
         .author("Nathaniel Roman <ngroman@gmail.com>")
         .setting(AppSettings::TrailingVarArg)
@@ -21,17 +21,9 @@ fn main() {
                 .short("s")
                 .long("speak")
                 .help("Annouce audibly"),
-        )
-        .arg(
-            Arg::with_name("pid")
-                .short("p")
-                .long("pid")
-                .conflicts_with("command")
-                .help("Wait for PID")
-                .validator(is_pid)
-                .takes_value(true),
-        )
-        .get_matches();
+        );
+    let app = pid_arg(app);
+    let matches = app.get_matches();
 
     let action = if let Some(dur_s) = matches.value_of("duration") {
         match times::parse_dur(dur_s) {
@@ -39,7 +31,7 @@ fn main() {
             Err(err) => panic!(err), // TODO
         }
     } else if let Some(pid) = matches.value_of("pid") {
-        waiter::Action::WaitPid(pid.parse::<u32>().unwrap())
+        waiter::Action::WaitPid(pid.parse::<i32>().unwrap())
     } else if let Some(cmd) = matches.values_of("command") {
         waiter::Action::RunCommand(cmd.collect())
     } else {
@@ -52,6 +44,21 @@ fn main() {
         start,
     };
     waiter.run();
+}
+
+fn pid_arg<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+    if cfg!(unix) {
+        return app.arg(
+            Arg::with_name("pid")
+                .short("p")
+                .long("pid")
+                .conflicts_with("command")
+                .help("Wait for PID")
+                .validator(is_pid)
+                .takes_value(true),
+        );
+    }
+    app
 }
 
 fn is_pid(val: String) -> Result<(), String> {

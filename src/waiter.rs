@@ -1,3 +1,6 @@
+extern crate nix;
+use nix::sys::signal;
+use nix::unistd;
 use std::process::Command;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -14,7 +17,7 @@ pub struct Waiter<'a> {
 #[derive(Debug)]
 pub enum Action<'a> {
     Wait(Duration),
-    WaitPid(u32),
+    WaitPid(i32),
     RunCommand(Vec<&'a str>),
     Noop,
 }
@@ -25,7 +28,7 @@ impl<'a> Waiter<'a> {
     pub fn run(&self) {
         match &self.action {
             Action::Wait(dur) => self.wait(*dur),
-            Action::WaitPid(_pid) => eprintln!("Not implemented yet"), // TODO
+            Action::WaitPid(pid) => self.wait_pid(*pid),
             Action::RunCommand(cmd) => self.run_command(&cmd),
             Action::Noop => {}
         }
@@ -49,6 +52,24 @@ impl<'a> Waiter<'a> {
             ));
         }
         self.print_timer(Duration::from_secs(0), dur);
+    }
+
+    fn wait_pid(&self, pid: i32) {
+        if !cfg!(unix) {
+            panic!("--pid is only supported on unix");
+        }
+        let pid = unistd::Pid::from_raw(pid);
+        loop {
+            if let Err(_) = signal::kill(pid, None) {
+                break;
+            }
+            eprint!(
+                "  Waiting on pid {} {}   \r",
+                pid,
+                Waiter::fmt_duration(Instant::now() - self.start)
+            );
+            thread::sleep(Duration::from_secs_f32(0.1));
+        }
     }
 
     fn run_command(&self, cmd: &[&str]) {
