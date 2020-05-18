@@ -12,11 +12,11 @@ fn main() {
         .version("0.2")
         .author("Nathaniel Roman <ngroman@gmail.com>")
         .setting(AppSettings::TrailingVarArg)
-        .about("Run a binary or example of the local package")
+        .about("Utility to provide notifications after long commands")
         .arg(
             Arg::with_name("duration")
                 .validator(is_dur)
-                .help("Duration to wait in seconds or human-readable units (e.g. '6h 10m3s')."),
+                .help("Duration to wait in seconds or human-readable units (e.g. '6h 10m3s')"),
         )
         .arg(
             Arg::with_name("message")
@@ -30,16 +30,13 @@ fn main() {
             Arg::with_name("speak")
                 .short("s")
                 .long("speak")
-                .help("Audibly announce that the command is complete with terminal beep or `say` command (Mac only)."),
+                .help("Audibly announce that the command is complete with terminal beep or `say` command (Mac only)"),
         );
     let app = pid_arg(app);
     let matches = app.get_matches();
 
     let action = if let Some(dur_s) = matches.value_of("duration") {
-        match times::parse_dur(dur_s) {
-            Ok(dur) => waiter::Action::Wait(dur),
-            Err(err) => panic!(err), // TODO
-        }
+        waiter::Action::Wait(times::parse_dur(dur_s).unwrap())
     } else if let Some(pid) = matches.value_of("pid") {
         waiter::Action::WaitPid(pid.parse::<i32>().unwrap())
     } else if let Some(cmd) = matches.values_of("command") {
