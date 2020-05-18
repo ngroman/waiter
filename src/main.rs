@@ -9,18 +9,28 @@ mod waiter;
 fn main() {
     let start = Instant::now();
     let app = App::new("Waiter")
-        .version("0.1")
+        .version("0.2")
         .author("Nathaniel Roman <ngroman@gmail.com>")
         .setting(AppSettings::TrailingVarArg)
         .about("Run a binary or example of the local package")
-        .arg(Arg::with_name("duration").validator(is_dur))
-        .arg(Arg::with_name("message").default_value("Done"))
+        .arg(
+            Arg::with_name("duration")
+                .validator(is_dur)
+                .help("Duration to wait in seconds or human-readable units (e.g. '6h 10m3s')."),
+        )
+        .arg(
+            Arg::with_name("message")
+                .short("m")
+                .long("message")
+                .help("Message to say when complete")
+                .default_value("Done"),
+        )
         .arg(Arg::with_name("command").last(true).multiple(true))
         .arg(
             Arg::with_name("speak")
                 .short("s")
                 .long("speak")
-                .help("Annouce audibly"),
+                .help("Audibly announce that the command is complete with terminal beep or `say` command (Mac only)."),
         );
     let app = pid_arg(app);
     let matches = app.get_matches();
